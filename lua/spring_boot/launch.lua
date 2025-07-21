@@ -27,9 +27,14 @@ M.bootls_cmd = function(config)
     local boot_classpath = {}
     table.insert(boot_classpath, config.ls_path .. "/BOOT-INF/classes")
     table.insert(boot_classpath, config.ls_path .. "/BOOT-INF/lib/*")
+    local java_bin = "java"
+    if vim.env.LSP_JAVA_HOME ~= nil then
+      java_bin = vim.env.LSP_JAVA_HOME .. "/bin/java"
+    end
 
     return {
-      config.java_cmd or util.java_bin(),
+      -- config.java_cmd or util.java_bin(),
+      java_bin,
       "-XX:TieredStopAtLevel=1",
       "-Xmx1G",
       "-XX:+UseZGC",

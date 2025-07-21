@@ -3,7 +3,7 @@ local env = {
   VSCODE_EXTENSIONS = vim.env["VSCODE_EXTENSIONS"],
 }
 M.get_vscode_extensions = function()
-  return env.VSCODE_EXTENSIONS or "~/.vscode/extensions"
+  return env.VSCODE_EXTENSIONS or "~/.vscode-insiders/extensions"
 end
 M.find_one = function(extension_path)
   local v = vim.fn.glob(M.get_vscode_extensions() .. extension_path)
