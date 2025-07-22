@@ -1,6 +1,8 @@
 local M = {
   inited = false
 }
+require("spring_boot.highlight").setup()
+local highlight = require("spring_boot.highlight")
 
 --- @class ClassPathData
 --- @field entries CPE[]
@@ -45,11 +47,27 @@ function M.start_app_list_sync(location, name, isDeleted, cp)
     -- print("This is not a Spring Boot application: " .. name)
   end
 end
--- Define the click handler
-function M.on_module_click()
-  local line = vim.fn.line(".")
-  local module_name = M.boot_app_modules[line]
-  print("Clicked module: " .. module_name) -- Replace with your desired action
+
+---@param tree NuiTree
+function M.on_module_click(tree)
+  local windwin = vim.api.nvim_get_current_win()
+  local line_nr = vim.api.nvim_win_get_cursor(windwin)[1]
+  print("select line_nr: " .. line_nr)
+  local node = tree:get_node(line_nr)
+  if node == nil then
+    return
+  end
+  if node:has_children() then
+    if node:is_expanded() then
+      node:collapse()
+    else
+      node:expand()
+    end
+    tree:render()
+  else
+    print("this is leaf node")
+  end
+
 end
 function M.list_boot_modules()
   if #M.boot_app_modules == 0 then
@@ -79,38 +97,46 @@ function M.list_boot_modules()
       line = NuiLine({
         text = string.format("%s (%s)", module.name, module.location),
         hl_group = "NuiTreeNode",
+        highlight = function (param)
+          print("highlight" .. vim.inspect(param))
+        end
       }),
       id = tostring(i),
       module = module,
-    })
-    node.on_click = function()
-      M.on_module_click()
+    },
+    {
+      NuiTree.Node({
+        text = module.location,
+        hl_group = "SpringModule"
+      })
+    }
+  )
+  node:get_parent_id()
+  table.insert(nui_nodes, node)
+end
+
+local tree = NuiTree({
+  bufnr = bufnfr,
+  ns_id = highlight.get_ns_id(),
+  nodes = nui_nodes,
+  prepare_node = function(node)
+    local line = NuiLine()
+
+    line:append(string.rep("  ", node:get_depth() - 1))
+
+    if node:has_children() then
+      line:append("", "SpringModuleIcon")
+      line:append(node:is_expanded() and " " or " ", "SpecialChar")
+    else
     end
-    table.insert(nui_nodes, node)
-  end
 
-  local tree = NuiTree({
-    bufnr = bufnfr,
-    ns_id = vim.api.nvim_create_namespace("spring_boot_modules"),
-    nodes = nui_nodes,
-    prepare_node = function(node)
-      local line = NuiLine()
+    line:append(node.text, 'SpringModule')
 
-      line:append(string.rep("  ", node:get_depth() - 1))
-
-      if node:has_children() then
-        line:append(node:is_expanded() and " " or " ", "SpecialChar")
-      else
-        line:append("  ")
-      end
-
-      line:append("🛞")
-      line:append(node.text)
-
-      return line
-    end,
-  })
-  tree:render()
+    return line
+  end,
+})
+split:map("n", "<CR>", function() M.on_module_click(tree) end, { noremap = true, silent = true })
+tree:render()
 end
 function M.register_user_cmd()
   vim.api.nvim_create_user_command("SpringBootListModules", function()
