@@ -39,32 +39,78 @@ M.boot_app_modules = {}
 --- @param cp ClassPathData
 function M.start_app_list_sync(location, name, isDeleted, cp)
   if cp and M.is_boot_app_class_path(cp) then
-    table.insert(M.boot_app_modules, name)
-    print("This is a Spring Boot application: " .. name)
+    table.insert(M.boot_app_modules, { location = location, name = name, isDeleted = isDeleted, cp = cp })
+    -- print("This is a Spring Boot application: " .. name)
   else
-    print("This is not a Spring Boot application: " .. name)
+    -- print("This is not a Spring Boot application: " .. name)
   end
 end
+-- Define the click handler
+function M.on_module_click()
+  local line = vim.fn.line(".")
+  local module_name = M.boot_app_modules[line]
+  print("Clicked module: " .. module_name) -- Replace with your desired action
+end
 function M.list_boot_modules()
-  -- use plenary to show boot_app_modules in a menu that could be selected
   if #M.boot_app_modules == 0 then
     vim.notify("No Spring Boot modules found in the current workspace", vim.log.levels.INFO)
     return
   end
-  local plenary = require("plenary.popup")
-  plenary.create(
-    M.boot_app_modules,
-    {
-      title = "Spring Boot Modules",
-      border = true,
-      min_width = 50,
-      min_height = 10,
-      height = #M.boot_app_modules,
-      line = math.floor(vim.o.lines / 2),
-      col = math.floor(vim.o.columns / 2),
-      width = 50,
-    }
-  )
+  local NuiTree = require("nui.tree")
+  local NuiLine = require("nui.line")
+  local NuiSplit = require("nui.split")
+  local split = NuiSplit({
+    enter = true,
+    relative = "editor",
+    position = "left",
+    size = {
+      width = "20%",
+      height = "20%",
+    },
+  })
+  split:mount()
+  -- not show line number
+  local bufnfr = split.bufnr
+  local nui_nodes = {}
+  vim.api.nvim_buf_set_name(bufnfr, "Spring Boot Modules")
+  for i, module in ipairs(M.boot_app_modules) do
+    local node = NuiTree.Node({
+      text = module.name,
+      line = NuiLine({
+        text = string.format("%s (%s)", module.name, module.location),
+        hl_group = "NuiTreeNode",
+      }),
+      id = tostring(i),
+      module = module,
+    })
+    node.on_click = function()
+      M.on_module_click()
+    end
+    table.insert(nui_nodes, node)
+  end
+
+  local tree = NuiTree({
+    bufnr = bufnfr,
+    ns_id = vim.api.nvim_create_namespace("spring_boot_modules"),
+    nodes = nui_nodes,
+    prepare_node = function(node)
+      local line = NuiLine()
+
+      line:append(string.rep("  ", node:get_depth() - 1))
+
+      if node:has_children() then
+        line:append(node:is_expanded() and " " or " ", "SpecialChar")
+      else
+        line:append("  ")
+      end
+
+      line:append("🛞")
+      line:append(node.text)
+
+      return line
+    end,
+  })
+  tree:render()
 end
 function M.register_user_cmd()
   vim.api.nvim_create_user_command("SpringBootListModules", function()
@@ -74,8 +120,8 @@ function M.register_user_cmd()
     end
     M.list_boot_modules()
   end, {
-    desc = "List all Spring Boot modules in the current workspace",
-  })
+  desc = "List all Spring Boot modules in the current workspace",
+})
 end
 
 
