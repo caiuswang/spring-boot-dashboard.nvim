@@ -8,6 +8,7 @@ local highlight = require("spring_boot.highlight")
 
 --- @class ClassPathData
 --- @field entries CPE[]
+
 --- @class CPE
 --- @field kind string
 --- @field path string
@@ -15,9 +16,6 @@ local highlight = require("spring_boot.highlight")
 --- @field sourceContainerUrl string
 --- @field javadocContainerUrl string
 --- @field isSystem boolean
-
-
-
 
 --- @param cp ClassPathData
 function M.is_boot_app_class_path(cp)
@@ -44,9 +42,6 @@ M.boot_app_modules = {}
 function M.start_app_list_sync(location, name, isDeleted, cp)
   if cp and M.is_boot_app_class_path(cp) then
     table.insert(M.boot_app_modules, { location = location, name = name, isDeleted = isDeleted, cp = cp })
-    -- print("This is a Spring Boot application: " .. name)
-  else
-    -- print("This is not a Spring Boot application: " .. name)
   end
 end
 
@@ -55,7 +50,6 @@ end
 function M.on_module_click(tree, bufnr)
   local windwin = vim.api.nvim_get_current_win()
   local line_nr = vim.api.nvim_win_get_cursor(windwin)[1]
-  print("select line_nr: " .. line_nr)
   local node = tree:get_node(line_nr)
   if node == nil then
     return
@@ -68,15 +62,11 @@ function M.on_module_click(tree, bufnr)
     end
     tree:render()
   else
-    print("this is leaf node")
-    local cleaned_path = node.text:gsub("^file:", "")
-    local query = "locationPrefix:file://" ..cleaned_path .. "?@+"
-    print("query: " .. query)
     -- change to the main buffer
     -- vim.api.nvim_set_current_buf(bufnr)
     local opts = {
       prompt_title = "Spring Boot Modules",
-      query = query,
+      query = node.query,
       bufnr = bufnr
     }
     buliltin.lsp_workspace_symbols(opts)
@@ -92,6 +82,7 @@ function M.list_boot_modules()
   local NuiTree = require("nui.tree")
   local NuiLine = require("nui.line")
   local NuiSplit = require("nui.split")
+  local buf
   local split = NuiSplit({
     enter = true,
     relative = "editor",
@@ -107,23 +98,25 @@ function M.list_boot_modules()
   local nui_nodes = {}
   vim.api.nvim_buf_set_name(bufnfr, "Spring Boot Modules")
   for i, module in ipairs(M.boot_app_modules) do
+    local cleaned_path = module.location:gsub("^file:", "")
+    local beanQuery = "locationPrefix:file://" .. cleaned_path .. "?@+"
+    local mappingQuery = "locationPrefix:file://" .. cleaned_path .. "?@/"
     local node = NuiTree.Node({
       text = module.name,
-      line = NuiLine({
-        text = string.format("%s (%s)", module.name, module.location),
-        hl_group = "NuiTreeNode",
-        highlight = function (param)
-          print("highlight" .. vim.inspect(param))
-        end
-      }),
       id = tostring(i),
       module = module,
     },
     {
       NuiTree.Node({
-        text = module.location,
+        text = "beans",
+        query = beanQuery,
+        hl_group = "SpringModule",
+      }),
+      NuiTree.Node({
+        text = "mappings",
+        query = mappingQuery,
         hl_group = "SpringModule"
-      })
+      }),
     }
   )
   node:get_parent_id()
@@ -160,32 +153,37 @@ function M.register_user_cmd()
       vim.notify("Spring Boot classpath service not initialized", vim.log.levels.ERROR)
       return
     end
+    if M.is_spring_module_opend then
+      -- if already has buffer "Spring Boot Modules", then just split it on the left side
+      local bufnr = vim.fn.bufnr("SpringBootModules")
+      vim.cmd("vsplit")
+      vim.api.nvim_set_current_win(bufnr)
+    end
     -- if alread has buffer "Spring Boot Modules", then just split it on the left side
     M.list_boot_modules()
   end, {
   desc = "List all Spring Boot modules in the current workspace",
 })
-    local function open_module_window()
-        -- Check if the Spring Boot modules window is already open
-        for _, win in ipairs(vim.api.nvim_list_wins()) do
-            local bufname = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
-            if bufname:match("SpringBootModules") then
-                vim.api.nvim_set_current_win(win)
-                return
-            end
-        end
+local function open_module_window()
+  -- Check if the Spring Boot modules window is already open
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local bufname = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+    if bufname:match("SpringBootModules") then
+      vim.api.nvim_set_current_win(win)
+      return
     end
-
-    -- Ensure the module window remains fixed when opening new files
-    vim.api.nvim_create_autocmd("BufWinEnter", {
-        callback = function()
-          if M.is_spring_module_opend then
-            open_module_window()
-          end
-        end,
-    })
+  end
+  -- Ensure the module window remains fixed when opening new files
+  vim.api.nvim_create_autocmd("BufWinEnter", {
+    callback = function()
+      if M.is_spring_module_opend then
+        open_module_window()
+      end
+    end,
+  })
 end
 
+end
 
 
 M.register_classpath_service = function(client)
