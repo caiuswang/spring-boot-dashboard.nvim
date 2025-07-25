@@ -1,6 +1,11 @@
+local NuiSplit = require("nui.split")
+local NuiTree = require("nui.tree")
+local NuiLine = require("nui.line")
 local M = {
   inited = false,
   is_spring_module_opend = false,
+  windw_id = nil,
+  buf_id = nil
 }
 require("spring_boot.highlight").setup()
 local buliltin = require("telescope.builtin")
@@ -74,17 +79,42 @@ function M.on_module_click(tree, bufnr)
 
 end
 function M.list_boot_modules()
-  local current_bufnr = vim.api.nvim_get_current_buf()
-  if #M.boot_app_modules == 0 then
-    vim.notify("No Spring Boot modules found in the current workspace", vim.log.levels.INFO)
-    return
+  if M.buf_id ~= nil then
+    if vim.api.nvim_buf_is_valid(M.buf_id) then
+      -- if the buffer is already opened, just split it and set buf_id
+      local bufnfr = M.buf_id
+      local split = NuiSplit({
+        bufnr = bufnfr,
+        enter = true,
+        buf_options = {
+          filetype = "SpringBootModules",
+          modifiable = false,
+          readonly = true,
+          swapfile = false,
+        },
+        relative = "editor",
+        position = "left",
+        size = {
+          width = "20%",
+          height = "20%",
+        },
+      })
+      split:mount()
+      vim.api.nvim_set_current_win(split.winid)
+      vim.api.nvim_set_current_buf(M.buf_id)
+      M.windw_id = split.winid
+      return
+    end
   end
-  local NuiTree = require("nui.tree")
-  local NuiLine = require("nui.line")
-  local NuiSplit = require("nui.split")
-  local buf
+  local current_bufnr = vim.api.nvim_get_current_buf()
   local split = NuiSplit({
     enter = true,
+    buf_options = {
+      filetype = "SpringBootModules",
+      modifiable = false,
+      readonly = true,
+      swapfile = false,
+    },
     relative = "editor",
     position = "left",
     size = {
@@ -93,8 +123,11 @@ function M.list_boot_modules()
     },
   })
   split:mount()
-  -- not show line number
+  M.windw_id = split.winid
+  -- set windo no line numbers
   local bufnfr = split.bufnr
+  M.buf_id = bufnfr
+  vim.api.nvim_set_option_value("number", false, {win= M.win})
   local nui_nodes = {}
   vim.api.nvim_buf_set_name(bufnfr, "Spring Boot Modules")
   for i, module in ipairs(M.boot_app_modules) do
@@ -118,8 +151,7 @@ function M.list_boot_modules()
         hl_group = "SpringModule"
       }),
     }
-  )
-  node:get_parent_id()
+  ) node:get_parent_id()
   table.insert(nui_nodes, node)
 end
 
@@ -133,7 +165,12 @@ local tree = NuiTree({
     line:append(string.rep("  ", node:get_depth() - 1))
 
     if node:has_children() then
-      line:append("", "SpringModuleIcon")
+      if node:is_expanded() then
+        line:append("󰉖", "SpringModuleIcon")
+      else
+        line:append("", "SpringModuleIcon")
+      end
+
       line:append(node:is_expanded() and " " or " ", "SpecialChar")
     else
     end
@@ -147,46 +184,37 @@ split:map("n", "<CR>", function() M.on_module_click(tree, current_bufnr) end, { 
 tree:render()
 M.is_spring_module_opend = true
 end
+
 function M.register_user_cmd()
   vim.api.nvim_create_user_command("SpringBootListModules", function()
     if not M.inited then
       vim.notify("Spring Boot classpath service not initialized", vim.log.levels.ERROR)
       return
     end
-    if M.is_spring_module_opend then
-      -- if already has buffer "Spring Boot Modules", then just split it on the left side
-      local bufnr = vim.fn.bufnr("SpringBootModules")
-      vim.cmd("vsplit")
-      vim.api.nvim_set_current_win(bufnr)
+    if M.windw_id ~= nil then
+      if vim.api.nvim_win_is_valid(M.windw_id) then
+        local buf = vim.api.nvim_win_get_buf(M.windw_id)
+        if vim.api.nvim_get_option_value("filetype", {buf = buf}) == "SpringBootModules" then
+          return
+        else
+          vim.api.nvim_set_current_win(M.windw_id)
+          vim.api.nvim_set_current_buf(M.buf_id)
+          return
+        end
+      else
+        M.list_boot_modules()
+      end
+    else
+        M.list_boot_modules()
     end
-    -- if alread has buffer "Spring Boot Modules", then just split it on the left side
-    M.list_boot_modules()
   end, {
   desc = "List all Spring Boot modules in the current workspace",
 })
-local function open_module_window()
-  -- Check if the Spring Boot modules window is already open
-  for _, win in ipairs(vim.api.nvim_list_wins()) do
-    local bufname = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
-    if bufname:match("SpringBootModules") then
-      vim.api.nvim_set_current_win(win)
-      return
-    end
-  end
-  -- Ensure the module window remains fixed when opening new files
-  vim.api.nvim_create_autocmd("BufWinEnter", {
-    callback = function()
-      if M.is_spring_module_opend then
-        open_module_window()
-      end
-    end,
-  })
-end
-
 end
 
 
 M.register_classpath_service = function(client)
+  M.register_user_cmd()
   client.handlers["sts/addClasspathListener"] = function(_, result)
     local callbackCommandId = result.callbackCommandId
     vim.lsp.commands[callbackCommandId] = function(param, _)
@@ -196,7 +224,6 @@ M.register_classpath_service = function(client)
       end
       local location, name, isDeleted, classPathData = param[1], param[2], param[3], param[4]
       M.start_app_list_sync(location, name, isDeleted, classPathData)
-      M.register_user_cmd()
       M.inited = true
       return require("spring_boot.util").boot_execute_command(callbackCommandId, param)
     end
@@ -208,4 +235,32 @@ M.register_classpath_service = function(client)
     return require("spring_boot.jdtls").execute_command("sts.java.removeClasspathListener", { callbackCommandId })
   end
 end
+
+
+function M.intercept_buffer_open()
+  vim.api.nvim_create_autocmd("BufWinEnter", {
+    callback = function(p)
+      -- if the current window is the SpringModule window, redirect to another window
+      local current_wind = vim.api.nvim_get_current_win()
+      if M.windw_id and current_wind == M.windw_id then
+        -- move the current buffer to another window
+        -- recover the buffer to previsous buffer
+        vim.api.nvim_win_set_buf(M.windw_id, M.buf_id)
+        local all_wins = vim.api.nvim_list_wins()
+        for _, win in ipairs(all_wins) do
+          if win ~= M.windw_id then
+            vim.api.nvim_set_current_win(win)
+            vim.api.nvim_win_set_buf(win, p.buf)
+            return
+          end
+        end
+        return
+      end
+    end,
+  })
+end
+
+
+M.intercept_buffer_open()
+
 return M
