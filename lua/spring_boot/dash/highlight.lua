@@ -1,8 +1,12 @@
 local H = {}
 H.setup = function ()
   H.ns_id = vim.api.nvim_create_namespace("spirng_boot_dashboard.nvim")
-  H.create_highlight_group("SpringModuleIcon",   { "NeoTreeDirectoryIcon"}, "blue", "73cef4")
+  H.create_highlight_group("SpringModuleIcon",   { "NeoTreeDirectoryIcon"}, nil, "#73cef4")
   H.create_highlight_group("SpringModule",  {}, nil, nil, "bold")
+  H.create_highlight_group("SpringModuleBean", {}, nil, "#00a0ff", nil)
+  H.create_highlight_group("SpringModuleMappings", {}, nil, "#00ff00", nil)
+  vim.fn.sign_define('SpringBeanSign', { text = '', texthl = 'SpringModuleBean', linehl = 'SpringModuleBean'})
+  vim.fn.sign_define('SpringMappingSign', { text = '', texthl = 'SpringModuleMappings', linehl = 'SpringModuleMappings'})
   return H
 end
 
@@ -54,10 +58,10 @@ H.create_highlight_group = function(hl_group_name, link_to_if_exists, background
 
     local cmd = "highlight default " .. hl_group_name
     if background then
-      cmd = cmd .. " guibg=#" .. background
+      cmd = cmd .. " guibg=" .. background
     end
     if foreground then
-      cmd = cmd .. " guifg=#" .. foreground
+      cmd = cmd .. " guifg=" .. foreground
     else
       cmd = cmd .. " guifg=NONE"
     end

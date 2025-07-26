@@ -80,6 +80,20 @@ function M.on_module_click(tree, bufnr)
       node:expand()
     end
     tree:render()
+    local spring_module_bufnr = M.buf_id
+    if spring_module_bufnr ~= nil then
+      local total_lines = vim.api.nvim_buf_line_count(spring_module_bufnr)
+      for i = 1, total_lines do
+        local current_line_node = tree:get_node(i)
+        if current_line_node then
+          if current_line_node.text == "beans" then
+            vim.fn.sign_place(0, "", "SpringBeanSign", spring_module_bufnr, { lnum = i })
+          elseif current_line_node.text == "mappings" then
+            vim.fn.sign_place(0, "", "SpringMappingSign", spring_module_bufnr, { lnum = i })
+          end
+        end
+      end
+    end
   else
     -- change to the main buffer
     -- vim.api.nvim_set_current_buf(bufnr)
@@ -155,12 +169,12 @@ function M.list_boot_modules()
       NuiTree.Node({
         text = "beans",
         query = beanQuery,
-        hl_group = "SpringModule",
+        hl_group = "SpringModuleBean",
       }),
       NuiTree.Node({
         text = "mappings",
         query = mappingQuery,
-        hl_group = "SpringModule"
+        hl_group = "SpringModuleMappings"
       }),
     })
     table.insert(nui_nodes, node)
@@ -231,8 +245,14 @@ function M.intercept_buffer_open()
 
   vim.api.nvim_create_autocmd("BufWinEnter", {
     callback = function(p)
+      local namespace_id = highlight.get_ns_id()
+      vim.api.nvim_buf_set_extmark(p.buf, namespace_id, 0, 0, {
+        virt_text = {{"⚡", "ErrorMsg"}},
+        virt_text_pos = "overlay", -- or "eol", "overlay"
+      })
       local current_wind = vim.api.nvim_get_current_win()
       local current_cursor = vim.api.nvim_win_get_cursor(current_wind)
+      -- set ext_mark
       if M.windw_id and current_wind == M.windw_id then
         -- if the current window is the SpringModule window, recover the buffer
         vim.api.nvim_win_set_buf(M.windw_id, M.buf_id)
