@@ -245,11 +245,6 @@ function M.intercept_buffer_open()
 
   vim.api.nvim_create_autocmd("BufWinEnter", {
     callback = function(p)
-      local namespace_id = highlight.get_ns_id()
-      vim.api.nvim_buf_set_extmark(p.buf, namespace_id, 0, 0, {
-        virt_text = {{"⚡", "ErrorMsg"}},
-        virt_text_pos = "overlay", -- or "eol", "overlay"
-      })
       local current_wind = vim.api.nvim_get_current_win()
       local current_cursor = vim.api.nvim_win_get_cursor(current_wind)
       -- set ext_mark
